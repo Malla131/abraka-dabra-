@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Procurement Cost Intelligence — Complete PPI Monitor (BLS + FRED)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --light-gray:#BFBFBF; --charcoal:#3F3F3F; --steel-blue:#4D83A2; --electric-blue:#1B61FF;
+    --violet:#9061FF; --soft-yellow:#FFF077; --orchid-pink:#DB8EDD; --aqua-mint:#85ECE5;
+
+    --bg:#1c1c1f; --card:#2f2f33; --ink:#f2f2f2; --muted:#BFBFBF; --line:#4a4a50;
+    --navy:#f2f2f2; --navy-2:#1B61FF;
+    --amber:#FFF077; --amber-bg:rgba(255,240,119,.16);
+    --green:#85ECE5; --green-bg:rgba(133,236,229,.16);
+    --red:#DB8EDD; --red-bg:rgba(219,142,221,.16);
+    --gray:#BFBFBF; --gray-bg:rgba(191,191,191,.14);
+    --forecast:#9061FF; --forecast-bg:rgba(144,97,255,.16);
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+    --shadow-lg:0 8px 20px rgba(27,97,255,.28), 0 20px 44px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);}
+  body{
+    font-family:'Inter',sans-serif;color:var(--ink);min-height:100vh;padding:0 0 60px;
+    background:
+      radial-gradient(circle at 8% -8%, rgba(144,97,255,.14), transparent 42%),
+      radial-gradient(circle at 100% 0%, rgba(27,97,255,.12), transparent 42%),
+      radial-gradient(circle at 50% 100%, rgba(133,236,229,.06), transparent 50%),
+      var(--bg);
+  }
+  a{color:var(--navy-2);}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  *{transition-property: transform, box-shadow, background-color, border-color, opacity, color; transition-duration:.18s; transition-timing-function:ease;}
+
+  @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  @keyframes loadingPulse{0%,100%{opacity:.45;}50%{opacity:1;}}
+  @keyframes glowPulse{0%,100%{box-shadow:0 0 0 rgba(27,97,255,0);}50%{box-shadow:0 0 14px rgba(27,97,255,.35);}}
+
+  .topbar{background:#141416;color:#fff;padding:22px 28px;border-bottom:3px solid var(--electric-blue);}
+  .topbar-inner{max-width:1180px;margin:0 auto;display:flex;justify-content:space-between;
+    align-items:flex-start;gap:20px;flex-wrap:wrap;}
+  .brand-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--aqua-mint);margin:0 0 6px;}
+  .brand-title{font-size:22px;font-weight:800;margin:0 0 4px;letter-spacing:-0.01em;}
+  .brand-sub{font-size:13px;color:var(--light-gray);margin:0;max-width:620px;line-height:1.45;}
+  .top-actions{text-align:right;}
+  .status-pill{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:99px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);font-size:12px;
+    font-family:'IBM Plex Mono',monospace;color:#eaf1fb;}
+  .dot{width:7px;height:7px;border-radius:50%;background:#7d7d84;flex:none;}
+  .dot.live{background:var(--aqua-mint);box-shadow:0 0 8px var(--aqua-mint);}
+  .dot.cached{background:var(--soft-yellow);box-shadow:0 0 8px var(--soft-yellow);}
+  .dot.pending{background:var(--electric-blue);animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .status-time{color:#8b8b92;font-size:10.5px;margin-top:6px;}
+  .btn-row{display:flex;gap:8px;margin-top:9px;justify-content:flex-end;flex-wrap:wrap;}
+  .btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:#eaf1fb;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.03em;
+    padding:6px 12px;border-radius:6px;cursor:pointer;}
+  .btn:hover{background:rgba(27,97,255,.22);border-color:var(--electric-blue);transform:translateY(-1px);}
+  .btn:active{transform:translateY(0);}
+  .btn:focus-visible{outline:2px solid var(--electric-blue);outline-offset:2px;}
+  .btn-light{background:var(--electric-blue);border:1px solid var(--electric-blue);color:#fff;font-weight:600;}
+  .btn-light:hover{background:#3d78ff;box-shadow:0 0 14px rgba(27,97,255,.5);}
+
+  .key-form{display:none;max-width:1180px;margin:14px auto 0;background:rgba(255,255,255,.04);
+    border:1px dashed rgba(255,255,255,.22);border-radius:12px;padding:16px;gap:10px;flex-wrap:wrap;align-items:flex-end;}
+  .key-form.show{display:flex;animation:fadeUp .22s ease;}
+  .key-form .hint{width:100%;font-size:11.5px;color:var(--light-gray);line-height:1.5;margin-bottom:4px;}
+  .key-form .field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:200px;}
+  .key-form label{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--aqua-mint);text-transform:uppercase;letter-spacing:.06em;}
+  .key-form input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:#fff;
+    font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:8px 10px;border-radius:8px;outline:none;}
+  .key-form input:focus{border-color:var(--electric-blue);}
+
+  .tabbar{max-width:1180px;margin:0 auto;padding:0 28px;display:flex;gap:4px;border-bottom:1px solid var(--line);
+    background:var(--bg);position:sticky;top:0;z-index:5;overflow-x:auto;}
+  .tab{padding:14px 18px;font-size:13.5px;font-weight:600;color:var(--muted);cursor:pointer;
+    border-bottom:2.5px solid transparent;user-select:none;white-space:nowrap;position:relative;z-index:1;}
+  .tab.active{color:var(--electric-blue);}
+  .tab:hover:not(.active){color:var(--ink);}
+  .tab-indicator{position:absolute;bottom:-1px;height:2.5px;background:var(--electric-blue);
+    border-radius:2px;left:0;width:0;transition:left .28s cubic-bezier(.4,0,.2,1), width .28s cubic-bezier(.4,0,.2,1);
+    box-shadow:0 0 8px rgba(27,97,255,.7);}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 28px 0;}
+  .tabpanel{display:none;}
+  .tabpanel.active{display:block;animation:fadeUp .3s ease;}
+
+  .msg-banner{display:none;font-size:12.5px;font-family:'IBM Plex Mono',monospace;
+    background:var(--amber-bg);border:1px solid rgba(255,240,119,.4);color:var(--soft-yellow);
+    padding:10px 14px;border-radius:8px;margin-bottom:18px;line-height:1.5;}
+  .msg-banner.show{display:block;animation:fadeUp .2s ease;}
+  .msg-banner.info{background:rgba(27,97,255,.14);border-color:rgba(27,97,255,.4);color:#7ea3ff;}
+
+  .overview-head{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
+  .section-title{font-size:16px;font-weight:700;margin:0 0 4px;color:var(--ink);}
+  .section-sub{font-size:12.5px;color:var(--muted);margin:0;max-width:660px;line-height:1.5;}
+  .reliability-box{background:rgba(27,97,255,.10);border:1px solid rgba(27,97,255,.3);border-radius:10px;
+    padding:10px 14px;font-size:11.5px;color:#a8c4ff;line-height:1.5;margin-bottom:18px;}
+  .kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+  @media (max-width:760px){.kpi-strip{grid-template-columns:repeat(2,1fr);}}
+  .kpi-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);
+    animation:fadeUp .35s ease;}
+  .kpi-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:6px;}
+  .kpi-value{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700;color:var(--ink);}
+
+  .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px;margin-bottom:10px;}
+  .ppi-card{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--electric-blue);border-radius:14px;padding:16px;box-shadow:var(--shadow);
+    cursor:pointer;display:flex;flex-direction:column;gap:8px;animation:fadeUp .4s ease both;}
+  .ppi-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--electric-blue);}
+  .ppi-card:focus-visible{outline:2px solid var(--electric-blue);outline-offset:2px;}
+  .ppi-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .ppi-cat{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--electric-blue);margin:0 0 3px;}
+  .ppi-name{font-size:13px;font-weight:600;line-height:1.3;margin:0;color:var(--ink);}
+  .signal-badge{font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.03em;
+    padding:3px 8px;border-radius:99px;white-space:nowrap;}
+  .signal-rising-fast{background:var(--red-bg);color:var(--red);}
+  .signal-rising{background:var(--amber-bg);color:var(--amber);}
+  .signal-stable{background:var(--gray-bg);color:var(--gray);}
+  .signal-falling{background:var(--green-bg);color:var(--green);}
+  .ppi-value{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:700;color:var(--ink);}
+  .ppi-asof{font-size:11px;color:var(--muted);}
+  .ppi-metrics{display:flex;gap:14px;margin-top:2px;}
+  .ppi-metric{font-size:11.5px;}
+  .ppi-metric .lbl{color:var(--muted);margin-right:4px;}
+  svg.mini-spark{width:100%;height:34px;}
+  .up{color:var(--red);} .down{color:var(--green);} .flat{color:var(--muted);}
+  .card-note{font-size:11px;color:var(--muted);font-style:italic;}
+  .card-note.is-loading{animation:loadingPulse 1.3s ease-in-out infinite;}
+
+  .selector-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;align-items:center;}
+  select#ppiSelect{
+    flex:1;min-width:280px;background:var(--card);border:1px solid var(--line);
+    color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:13px;padding:11px 14px;
+    border-radius:10px;outline:none;appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%231B61FF'><path d='M5 7l5 6 5-6z'/></svg>");
+    background-repeat:no-repeat;background-position:right 12px center;background-size:16px;
+    box-shadow:var(--shadow);
+  }
+  select#ppiSelect:focus{border-color:var(--electric-blue);}
+  .detail-btns{display:flex;gap:8px;flex-wrap:wrap;}
+  .btn-outline{background:var(--card);border:1px solid var(--line);color:var(--ink);
+    font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:9px 14px;border-radius:8px;cursor:pointer;}
+  .btn-outline:hover{border-color:var(--electric-blue);color:var(--electric-blue);box-shadow:0 0 10px rgba(27,97,255,.25);}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;box-shadow:var(--shadow);}
+  .empty-state{text-align:center;padding:56px 20px;color:var(--muted);font-size:14px;}
+
+  .source-tag{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;
+    padding:3px 8px;border-radius:99px;margin-left:8px;vertical-align:middle;letter-spacing:.03em;}
+  .source-tag.official{background:var(--green-bg);color:var(--green);border:1px solid rgba(133,236,229,.4);}
+  .source-tag.local{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(255,240,119,.4);}
+  .source-tag.forecast{background:var(--forecast-bg);color:var(--forecast);border:1px solid rgba(144,97,255,.4);}
+
+  .head-row{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;
+    margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--line);}
+  .head-cat{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--electric-blue);margin:0 0 4px;}
+  .head-name{font-size:19px;font-weight:700;margin:0 0 6px;line-height:1.3;color:var(--ink);}
+  .head-id{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);}
+  .head-latest{text-align:right;}
+  .latest-value{font-family:'IBM Plex Mono',monospace;font-size:36px;font-weight:700;color:var(--ink);}
+  .latest-asof{font-size:11.5px;color:var(--muted);}
+  .signal-line{margin-top:6px;}
+
+  .metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:8px;}
+  @media (max-width:640px){.metrics-row{grid-template-columns:repeat(2,1fr);}}
+  .metric{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:13px 10px;text-align:center;}
+  .metric:hover{border-color:var(--electric-blue);}
+  .metric-label{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+  .metric-value{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:700;}
+  .metric-detail{font-size:10.5px;color:var(--muted);margin-top:4px;}
+  .calc-note{font-size:11px;color:var(--muted);margin:6px 0 20px;text-align:right;}
+
+  .chart-block{margin-bottom:22px;}
+  .chart-head{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;
+    font-size:11px;color:var(--muted);margin-bottom:10px;}
+  svg.chart{width:100%;height:190px;overflow:visible;}
+  .chart-legend{display:flex;gap:16px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);margin-top:8px;}
+  .chart-legend .item{display:flex;align-items:center;gap:5px;}
+  .chart-legend .swatch{width:14px;height:2.5px;border-radius:2px;}
+  .chart-legend .swatch.dashed{background:none;border-top:2.5px dashed var(--violet);height:0;}
+
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  @media (max-width:760px){.stats-grid{grid-template-columns:repeat(2,1fr);}}
+  .stat-box{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:13px;}
+  .stat-box:hover{border-color:var(--violet);}
+  .stat-box .label{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+  .stat-box .value{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--ink);}
+  .stat-box .sub{font-size:10.5px;color:var(--muted);margin-top:3px;}
+  .diag{margin-top:12px;font-size:10.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace;line-height:1.6;}
+  .diag b{color:var(--ink);}
+
+  .momentum-badge{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;padding:3px 8px;
+    border-radius:99px;white-space:nowrap;}
+  .momentum-accel{background:var(--red-bg);color:var(--red);}
+  .momentum-decel{background:var(--green-bg);color:var(--green);}
+  .momentum-steady{background:var(--gray-bg);color:var(--gray);}
+  .percentile-bar{position:relative;height:8px;background:var(--line);border-radius:99px;overflow:hidden;}
+  .percentile-fill{position:absolute;top:0;left:0;height:100%;border-radius:99px;background:var(--electric-blue);
+    transition:width .5s cubic-bezier(.4,0,.2,1);}
+
+  .compare-check{display:flex;align-items:center;gap:8px;background:var(--bg);
+    border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:12.5px;cursor:pointer;color:var(--ink);}
+  .compare-check input{accent-color:var(--electric-blue);}
+  .compare-check:hover{border-color:var(--electric-blue);}
+  .compare-check.disabled{opacity:.4;cursor:not-allowed;}
+  .compare-legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted);}
+  .compare-legend .item{display:flex;align-items:center;gap:6px;}
+  .compare-legend .swatch{width:10px;height:10px;border-radius:2px;}
+  table.compare-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:14px;}
+  table.compare-table th, table.compare-table td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--line);color:var(--ink);}
+  table.compare-table th:first-child, table.compare-table td:first-child{text-align:left;}
+  table.compare-table th{font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;
+    letter-spacing:.04em;color:var(--muted);font-weight:600;}
+
+  .forecast-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow);
+    animation:fadeUp .4s ease both;}
+  .forecast-card:hover{border-color:var(--violet);box-shadow:0 8px 20px rgba(144,97,255,.22), 0 20px 44px rgba(0,0,0,.4);}
+  .forecast-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}
+  .forecast-horizons{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px;}
+  .forecast-chip{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 8px;text-align:center;}
+  .forecast-chip:hover{border-color:var(--violet);}
+  .forecast-chip .h-label{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
+  .forecast-chip .h-month{font-size:9.5px;color:var(--muted);margin-bottom:5px;}
+  .forecast-chip .h-value{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;color:var(--ink);}
+  .forecast-chip .h-change{font-family:'IBM Plex Mono',monospace;font-size:10.5px;margin-top:3px;}
+  .methodology-box{background:var(--forecast-bg);border:1px solid rgba(144,97,255,.4);border-radius:10px;padding:14px 16px;
+    font-size:12px;color:#dccdff;line-height:1.6;margin-bottom:20px;}
+
+  .footer{max-width:1180px;margin:26px auto 0;padding:16px 28px 0;border-top:1px solid var(--line);
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:11.5px;
+    color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+
+  @media print{
+    .topbar .btn-row, .key-form, .tabbar, .footer, .detail-btns, #exportOverviewBtn, #refreshAllBtn { display:none !important; }
+    body{background:#fff;}
+    .ppi-card:hover{transform:none;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div>
+      <p class="brand-eyebrow">Sourcing &amp; Procurement Intelligence</p>
+      <h1 class="brand-title">Producer Price Index — Complete Cost Monitor</h1>
+      <p class="brand-sub">Live BLS + FRED Producer Price Index tracking across 16 sourcing categories, with cost-pressure signals and seasonal forecasting built for supplier negotiation and should-cost timing decisions.</p>
+    </div>
+    <div class="top-actions">
+      <span class="status-pill"><span class="dot pending" id="statusDot"></span><span id="statusText">Idle</span></span>
+      <div class="status-time" id="statusTime">&nbsp;</div>
+      <div class="btn-row">
+        <button class="btn" id="refreshAllBtn" type="button">↻ Refresh All</button>
+        <button class="btn" id="testConnBtn" type="button">Test Connection</button>
+        <button class="btn" id="keyToggleBtn" type="button">⚙ API Key</button>
+      </div>
+    </div>
+  </div>
+  <div class="key-form" id="keyForm">
+    <div class="hint">
+      BLS's API works without a key, but unregistered access shares a 25-requests/day cap per IP address across everyone using the same free proxy. A
+      <a href="https://data.bls.gov/registrationEngine/" target="_blank" rel="noopener" style="color:var(--aqua-mint);">free registration key</a> raises that to 500/day, tied to you. A
+      <a href="https://fred.stlouisfed.org/docs/api/api_key.html" target="_blank" rel="noopener" style="color:var(--aqua-mint);">free FRED API key</a> lets this tool fall back to the St. Louis Fed's mirror of the same BLS data whenever BLS itself is unreachable — a second independent source, so no category goes missing just because one API is rate-limited. Both keys are stored only in your browser, never shared.
+    </div>
+    <div class="field"><label>BLS registration key (optional)</label><input type="text" id="blsKeyInput" placeholder="paste your free BLS key here"></div>
+    <div class="field"><label>FRED API key (optional, enables fallback)</label><input type="text" id="fredKeyInput" placeholder="paste your free FRED key here"></div>
+    <button class="btn btn-light" id="saveKeyBtn" type="button">Save keys</button>
+  </div>
+</div>
+
+<div class="tabbar" id="tabbar">
+  <div class="tab active" data-tab="overview">Overview</div>
+  <div class="tab" data-tab="detail">Series Detail</div>
+  <div class="tab" data-tab="compare">Compare</div>
+  <div class="tab" data-tab="analysis">Analysis</div>
+  <div class="tab" data-tab="forecast">Forecast</div>
+  <div class="tab-indicator" id="tabIndicator"></div>
+</div>
+
+<div class="wrap">
+  <div id="msgBanner" class="msg-banner"></div>
+
+  <!-- OVERVIEW -->
+  <div class="tabpanel active" id="tab-overview">
+    <div class="overview-head">
+      <div>
+        <p class="section-title">Portfolio Overview</p>
+        <p class="section-sub">All 16 tracked categories at a glance, always pulled live from BLS with FRED as an automatic fallback source. Click any card to drill into full detail. Signal badges flag month-over-month cost pressure for sourcing timing — not a forecast.</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-outline" id="exportOverviewBtn" type="button">⤓ Export Summary CSV</button>
+        <button class="btn-outline" id="printSummaryBtn" type="button">🖨 Print Summary</button>
+      </div>
+    </div>
+    <div class="reliability-box" id="reliabilityBox"></div>
+    <div class="reliability-box" id="diagPanel" style="display:none;"></div>
+    <div class="kpi-strip" id="kpiStrip"></div>
+    <div class="cards-grid" id="overviewGrid"></div>
+  </div>
+
+  <!-- DETAIL -->
+  <div class="tabpanel" id="tab-detail">
+    <div class="selector-row">
+      <select id="ppiSelect"></select>
+      <div class="detail-btns">
+        <button class="btn-outline" id="refreshBtn" type="button">↻ Refresh</button>
+        <button class="btn-outline" id="exportBtn" type="button">⤓ Export CSV</button>
+      </div>
+    </div>
+    <div class="panel" id="mainPanel">
+      <div class="empty-state">Select a PPI series above to load its data.</div>
+    </div>
+  </div>
+
+  <!-- COMPARE -->
+  <div class="tabpanel" id="tab-compare">
+    <div class="panel" id="comparePanel">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div>
+          <p class="section-title">Compare PPI Series</p>
+          <p class="section-sub">Pick 2–5 categories to compare trend and change side by side. Lines are rebased to 100 at the start of the shared window, since raw index levels use different base periods and aren't directly comparable.</p>
+        </div>
+        <button class="btn-outline" id="compareBtn" type="button">Compare Selected</button>
+      </div>
+      <div id="compareChecks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-bottom:16px;"></div>
+      <div id="compareResults"></div>
+    </div>
+  </div>
+
+  <!-- ANALYSIS -->
+  <div class="tabpanel" id="tab-analysis">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div>
+          <p class="section-title">Momentum &amp; Historical Positioning</p>
+          <p class="section-sub">Is cost pressure accelerating or cooling, and how stretched is the current price versus its own trailing 4-year range? Both are directional read-outs to support negotiation timing, not predictions.</p>
+        </div>
+        <button class="btn-outline" id="refreshAnalysisBtn" type="button">↻ Refresh Analysis</button>
+      </div>
+      <div id="momentumTableWrap"><div class="empty-state">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- FORECAST -->
+  <div class="tabpanel" id="tab-forecast">
+    <div class="overview-head">
+      <div>
+        <p class="section-title">Seasonal Forecast — All Categories</p>
+        <p class="section-sub">Holt-Winters triple exponential smoothing (same family of method as Excel's FORECAST.ETS): trend + 12-month seasonality, fitted fresh on every load so the forecast always reflects the latest published data.</p>
+      </div>
+      <button class="btn-outline" id="refreshForecastBtn" type="button">↻ Refresh Forecasts</button>
+    </div>
+    <div class="methodology-box">
+      <b>How to read this:</b> each series is fit with Holt-Winters exponential smoothing (level + trend + seasonal components, optimized over a parameter grid to minimize in-sample error), then projected forward. This is the same technique family behind Excel's <span class="mono">FORECAST.ETS</span> — not a guaranteed identical output, since Excel's exact ETS model-selection differs internally, but built on the same trend + seasonality logic and meant to be directionally consistent with it. Treat this as a planning input, not a guarantee — real PPI moves are driven by events (tariffs, energy shocks, supply disruptions) that no smoothing model sees coming.
+    </div>
+    <div class="forecast-grid" id="forecastGrid"></div>
+  </div>
+</div>
+
+<div class="footer">
+  <span>Data: <a href="https://www.bls.gov/ppi/" target="_blank" rel="noopener">U.S. Bureau of Labor Statistics, PPI program</a>, via FRED series references</span>
+  <span id="footerUpdated">—</span>
+</div>
+
+<script>
+(function(){
+  // 16 tracked categories. Several share the same underlying series ID where
+  // that's the closest real BLS series available — the fetch layer below
+  // dedupes these automatically so a shared ID is only ever fetched once.
+  const SERIES = [
+    {id:"PCU333912333912",     category:"Axial Compressors",              name:"Air and Gas Compressor Manufacturing"},
+    {id:"PCU811310811310",     category:"Asset Recovery Services",        name:"Commercial Machinery Repair and Maintenance"},
+    {id:"PCU3339233392",       category:"Autonomous Mobile Robots",       name:"Material Handling Equipment Manufacturing"},
+    {id:"PCU333993333993",     category:"Cartoning Equipment",            name:"Packaging Machinery Manufacturing"},
+    {id:"PCU3335173335173",   category:"Electric Press Machinery",       name:"Metal Forming Machine Tools"},
+    {id:"PCU333415333415H",   category:"Heat Pumps",                     name:"Heat Pumps"},
+    {id:"PCU42384238",         category:"MRO Online Distribution Market Analysis", name:"Machinery, Equipment & Supplies Merchant Wholesalers"},
+    {id:"PCU4238004238001",   category:"MRO Vendor Managed Inventory Services", name:"Machinery and Supply Wholesaler Services"},
+    {id:"PCU811310811310",     category:"Crane Maintenance",              name:"Commercial Machinery Repair and Maintenance"},
+    {id:"PCU333994333994",     category:"Industrial Heaters",             name:"Industrial Process Furnace & Oven Manufacturing"},
+    {id:"PCU3335173335173",   category:"Metal Fabrication Equipment",    name:"Metal Forming Machine Tools"},
+    {id:"PCU333241333241",     category:"Bakery Forming Equipment",       name:"Food Product Machinery Manufacturing"},
+    {id:"PCU333993333993",     category:"Tube Filling Machine",           name:"Packaging Machinery Manufacturing"},
+    {id:"PCU337215337215",     category:"Warehouse Racks",                name:"Showcases, Partitions, Shelving & Lockers Mfg"},
+    {id:"PCU42384238",         category:"MRO Online Distribution (Europe)", name:"Machinery, Equipment & Supplies Merchant Wholesalers (US proxy)"},
+    {id:"PCU5321205321201",   category:"Truck Rental (Brazil)",          name:"Rental of Trucks, Truck Trailers & RVs (US proxy)"}
+  ];
+
+  const PROXIES = [
+    {name:"corsproxy.io",   build:(u)=>"https://corsproxy.io/?url="+encodeURIComponent(u)},
+    {name:"thingproxy",     build:(u)=>"https://thingproxy.freeboard.io/fetch/"+u},
+    {name:"allorigins.win", build:(u)=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u)},
+    {name:"codetabs.com",   build:(u)=>"https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(u)},
+    {name:"corsproxy.org",  build:(u)=>"https://corsproxy.org/?"+encodeURIComponent(u)},
+    {name:"cors.eu.org",    build:(u)=>"https://cors.eu.org/"+u}
+  ];
+  const BLS_V1 = "https://api.bls.gov/publicAPI/v1/timeseries/data/";
+  const BLS_V2 = "https://api.bls.gov/publicAPI/v2/timeseries/data/";
+  const FRED_BASE = "https://api.stlouisfed.org/fred/series/observations";
+  const TRAILING_MONTHS = 48;
+  const CACHE_TTL_MS = 10 * 60 * 1000;
+  const MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const FETCH_CONCURRENCY = 4; // cap concurrent categories so they don't all hit the free proxies at once
+
+  const el = (id) => document.getElementById(id);
+  let blsKey = "";
+  let fredKey = "";
+  let currentPoints = null, currentMeta = null, currentCatalog = null;
+  const cache = {};
+  const forecastCache = {};
+
+  function setStatus(kind, text){
+    el("statusDot").className = "dot " + kind;
+    el("statusText").textContent = text;
+    el("statusTime").textContent = "Checked " + new Date().toLocaleTimeString();
+  }
+  function showBanner(t, isInfo){
+    const b = el("msgBanner");
+    b.textContent = t;
+    b.className = "msg-banner show" + (isInfo ? " info" : "");
+  }
+  function hideBanner(){ el("msgBanner").classList.remove("show"); }
+
+  // AbortController-based timeout — works on every browser fetch runs on,
+  // unlike the newer AbortSignal.timeout() shorthand.
+  function timeoutSignal(ms){
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), ms);
+    return controller.signal;
+  }
+
+  // Concurrency-limited map: at most `limit` in flight at once.
+  async function mapLimit(items, limit, fn){
+    const results = new Array(items.length);
+    let idx = 0;
+    async function worker(){
+      while (idx < items.length){
+        const cur = idx++;
+        results[cur] = await fn(items[cur], cur);
+      }
+    }
+    await Promise.all(Array.from({length: Math.min(limit, items.length)}, worker));
+    return results;
+  }
+
+  function parsePoints(dataArr){
+    return dataArr
+      .filter(d => /^M(0[1-9]|1[0-2])$/.test(d.period))
+      .map(d => ({
+        year:+d.year, period:d.period, month:+d.period.slice(1), periodName:d.periodName,
+        value:parseFloat(d.value),
+        calc: d.calculations ? {
+          net: d.calculations.net_changes || {},
+          pct: d.calculations.pct_changes || d.calculations.percent_changes || {}
+        } : null
+      }))
+      .filter(d => !isNaN(d.value))
+      .sort((a,b) => (a.year*12+a.month) - (b.year*12+b.month));
+  }
+
+  function monthsBack(points, n){
+    if (!points.length) return null;
+    const latest = points[points.length-1];
+    const targetIdx = latest.year*12 + latest.month - n;
+    for (let i=points.length-1;i>=0;i--){
+      if (points[i].year*12+points[i].month === targetIdx) return points[i];
+    }
+    const idx = points.length-1-n;
+    return idx >= 0 ? points[idx] : null;
+  }
+  function pct(curr, prev){ return prev ? ((curr-prev)/prev)*100 : null; }
+  function monthLabel(p){ return p.periodName.slice(0,3)+" "+p.year; }
+
+  async function tryDirectFetch(id, startYear, endYear){
+    try{
+      const keyParam = blsKey ? `&registrationkey=${encodeURIComponent(blsKey)}` : "";
+      const url = `${BLS_V1}${id}?startyear=${startYear}&endyear=${endYear}${keyParam}&_=${Date.now()}`;
+      const resp = await fetch(url, {signal: timeoutSignal(5000)});
+      if (!resp.ok) return null;
+      const json = await resp.json();
+      const series = json && json.Results && json.Results.series && json.Results.series[0];
+      if (!series || !series.data || !series.data.length) return null;
+      return parsePoints(series.data);
+    } catch(e){ return null; }
+  }
+
+  async function tryOfficialCalcFetch(id, startYear, endYear){
+    const body = { seriesid:[id], startyear:String(startYear), endyear:String(endYear), calculations:true, catalog:true };
+    if (blsKey) body.registrationkey = blsKey;
+    for (const proxy of PROXIES){
+      try{
+        const resp = await fetch(proxy.build(BLS_V2), {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify(body), signal: timeoutSignal(10000)
+        });
+        if (!resp.ok) continue;
+        const json = await resp.json();
+        const series = json && json.Results && json.Results.series && json.Results.series[0];
+        if (!series || !series.data || !series.data.length) continue;
+        const points = parsePoints(series.data);
+        if (points.length >= 2){
+          const catalog = series.catalog ? {
+            basePeriod: series.catalog.base_period || null,
+            seasonality: series.catalog.seasonality || null
+          } : null;
+          return {points, catalog, via:proxy.name};
+        }
+      } catch(e){ /* try next */ }
+    }
+    return null;
+  }
+
+  async function tryFallbackFetch(id, startYear, endYear){
+    const keyParam = blsKey ? `&registrationkey=${encodeURIComponent(blsKey)}` : "";
+    const url = `${BLS_V1}${id}?startyear=${startYear}&endyear=${endYear}${keyParam}&_=${Date.now()}`;
+    for (const proxy of PROXIES){
+      try{
+        const resp = await fetch(proxy.build(url), {signal: timeoutSignal(9000)});
+        if (!resp.ok) continue;
+        const json = await resp.json();
+        const series = json && json.Results && json.Results.series && json.Results.series[0];
+        if (!series || !series.data || !series.data.length) continue;
+        const points = parsePoints(series.data);
+        if (points.length >= 2) return {points, via:proxy.name};
+      } catch(e){ /* try next */ }
+    }
+    return null;
+  }
+
+  // ============== FRED (fallback source) ==============
+  function parseFredObservations(obs){
+    return obs
+      .filter(o => o.value !== "." && o.value !== undefined && o.value !== null)
+      .map(o => {
+        const [y,m] = o.date.split("-");
+        const year = +y, month = +m;
+        const periodName = new Date(year, month-1, 1).toLocaleString("en-US",{month:"long"});
+        return {
+          year, period: "M"+String(month).padStart(2,"0"), month, periodName,
+          value: parseFloat(o.value), calc: null
+        };
+      })
+      .filter(p => !isNaN(p.value))
+      .sort((a,b) => (a.year*12+a.month) - (b.year*12+b.month));
+  }
+
+  async function tryFredDirectFetch(id, startYear, endYear){
+    if (!fredKey) return null;
+    try{
+      const url = `${FRED_BASE}?series_id=${encodeURIComponent(id)}&api_key=${encodeURIComponent(fredKey)}&file_type=json&observation_start=${startYear}-01-01&observation_end=${endYear}-12-31&_=${Date.now()}`;
+      const resp = await fetch(url, {signal: timeoutSignal(7000)});
+      if (!resp.ok) return null;
+      const json = await resp.json();
+      if (!json || !json.observations || !json.observations.length) return null;
+      const points = parseFredObservations(json.observations);
+      return points.length >= 2 ? points : null;
+    } catch(e){ return null; }
+  }
+
+  async function tryFredFallbackFetch(id, startYear, endYear){
+    if (!fredKey) return null;
+    const url = `${FRED_BASE}?series_id=${encodeURIComponent(id)}&api_key=${encodeURIComponent(fredKey)}&file_type=json&observation_start=${startYear}-01-01&observation_end=${endYear}-12-31&_=${Date.now()}`;
+    for (const proxy of PROXIES){
+      try{
+        const resp = await fetch(proxy.build(url), {signal: timeoutSignal(9000)});
+        if (!resp.ok) continue;
+        const json = await resp.json();
+        if (!json || !json.observations || !json.observations.length) continue;
+        const points = parseFredObservations(json.observations);
+        if (points.length >= 2) return {points, via:proxy.name+" (FRED)"};
+      } catch(e){ /* try next */ }
+    }
+    return null;
+  }
+
+  async function fetchFredRaw(id, startYear, endYear){
+    const direct = await tryFredDirectFetch(id, startYear, endYear);
+    if (direct) return {points:direct, official:false, catalog:null, route:"FRED direct"};
+    const raw = await tryFredFallbackFetch(id, startYear, endYear);
+    if (!raw) return null;
+    return {points:raw.points, official:false, catalog:null, route:raw.via};
+  }
+
+  function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+  async function fetchSeriesRaw(id, startYear, endYear, attempt){
+    attempt = attempt || 0;
+    if (attempt === 0) await sleep(Math.random()*500);
+    const direct = await tryDirectFetch(id, startYear, endYear);
+    if (direct) return {points:direct, official:false, catalog:null, route:"direct"};
+    const raw = await tryFallbackFetch(id, startYear, endYear);
+    if (!raw){
+      if (attempt < 2){
+        await sleep(900 + attempt*700 + Math.random()*600);
+        return fetchSeriesRaw(id, startYear, endYear, attempt+1);
+      }
+      const fred = await fetchFredRaw(id, startYear, endYear);
+      if (fred) return fred;
+      return null;
+    }
+    const official = await tryOfficialCalcFetch(id, startYear, endYear);
+    if (official) return {points:official.points, official:true, catalog:official.catalog, route:official.via+" (official calc)"};
+    return {points:raw.points, official:false, catalog:null, route:raw.via};
+  }
+
+  // ---- Shared, cross-session cache (window.storage, shared=true) ----
+  async function getSharedCache(key){
+    try{
+      const res = await window.storage.get(key, true);
+      if (!res || !res.value) return null;
+      const parsed = JSON.parse(res.value);
+      if (Date.now() - parsed.fetchedAt > CACHE_TTL_MS) return null;
+      return parsed;
+    } catch(e){ return null; }
+  }
+  async function setSharedCache(key, payload){
+    try{ await window.storage.set(key, JSON.stringify(payload), true); } catch(e){}
+  }
+
+  async function fetchSeries(id, forceRefresh){
+    const hit = cache[id];
+    if (!forceRefresh && hit && (Date.now() - hit.fetchedAt) < CACHE_TTL_MS) return hit.result;
+    if (!forceRefresh){
+      const shared = await getSharedCache("ppicache:main:"+id);
+      if (shared){ cache[id] = {result:shared.result, fetchedAt:shared.fetchedAt}; return shared.result; }
+    }
+    const endYear = new Date().getFullYear();
+    const raw = await fetchSeriesRaw(id, endYear-6, endYear);
+    if (!raw) return null;
+    const trim = (pts) => pts.length > TRAILING_MONTHS ? pts.slice(-TRAILING_MONTHS) : pts;
+    const result = {...raw, points: trim(raw.points)};
+    const fetchedAt = Date.now();
+    cache[id] = {result, fetchedAt};
+    setSharedCache("ppicache:main:"+id, {result, fetchedAt});
+    return result;
+  }
+
+  async function fetchSeriesForForecast(id, forceRefresh){
+    const hit = forecastCache[id];
+    if (!forceRefresh && hit && (Date.now() - hit.fetchedAt) < CACHE_TTL_MS) return hit.points;
+    if (!forceRefresh){
+      const shared = await getSharedCache("ppicache:forecast:"+id);
+      if (shared){ forecastCache[id] = {points:shared.points, fetchedAt:shared.fetchedAt}; return shared.points; }
+    }
+    const endYear = new Date().getFullYear();
+    const raw = await fetchSeriesRaw(id, endYear-11, endYear);
+    if (!raw) return null;
+    const fetchedAt = Date.now();
+    forecastCache[id] = {points: raw.points, fetchedAt};
+    setSharedCache("ppicache:forecast:"+id, {points: raw.points, fetchedAt});
+    return raw.points;
+  }
+
+  // Fetches one entry per UNIQUE series id, with bounded concurrency, then
+  // maps results back onto every category sharing that id.
+  async function fetchManyByCategory(seriesArr, forceRefresh, forecastMode){
+    const uniqueIds = [...new Set(seriesArr.map(s => s.id))];
+    const resultsById = {};
+    await mapLimit(uniqueIds, FETCH_CONCURRENCY, async (id) => {
+      resultsById[id] = forecastMode ? await fetchSeriesForForecast(id, forceRefresh) : await fetchSeries(id, forceRefresh);
+    });
+    return seriesArr.map(s => ({meta:s, data: resultsById[s.id] || null}));
+  }
+
+  // Probes the direct connection and every proxy individually against one
+  // known series, and reports the *actual* HTTP status or error for each —
+  // so "no data" can be diagnosed instead of guessed at. Also logs full
+  // detail to the browser console (F12) for copy/paste if you need to share it.
+  async function runConnectionTest(){
+    const panel = el("diagPanel");
+    panel.style.display = "block";
+    panel.innerHTML = `<div class="card-note is-loading">Testing direct connection and all 6 proxies against one known series (this takes a few seconds)…</div>`;
+    const testId = "WPU551";
+    const endYear = new Date().getFullYear();
+    const url = `${BLS_V1}${testId}?startyear=${endYear-1}&endyear=${endYear}`;
+    const results = [];
+
+    try{
+      const t0 = performance.now();
+      const resp = await fetch(url, {signal: timeoutSignal(6000)});
+      const ms = Math.round(performance.now()-t0);
+      results.push({name:"Direct (no proxy)", ok: resp.ok, detail: resp.ok ? `HTTP ${resp.status} in ${ms}ms` : `HTTP ${resp.status} ${resp.statusText}`});
+    } catch(e){
+      results.push({name:"Direct (no proxy)", ok:false, detail: (e && e.name==="AbortError") ? "Timed out (>6s)" : "Network/CORS error: "+(e && e.message ? e.message : String(e))});
+    }
+
+    for (const proxy of PROXIES){
+      try{
+        const t0 = performance.now();
+        const resp = await fetch(proxy.build(url), {signal: timeoutSignal(9000)});
+        const ms = Math.round(performance.now()-t0);
+        let bodyOk = false, bodyNote = "";
+        if (resp.ok){
+          try{
+            const json = await resp.json();
+            const series = json && json.Results && json.Results.series && json.Results.series[0];
+            bodyOk = !!(series && series.data && series.data.length);
+            bodyNote = bodyOk ? `${series.data.length} points` : "empty/unexpected response body";
+          } catch(parseErr){ bodyNote = "response wasn't valid JSON"; }
+        }
+        results.push({
+          name: proxy.name,
+          ok: resp.ok && bodyOk,
+          detail: !resp.ok ? `HTTP ${resp.status} ${resp.statusText}` : (bodyOk ? `HTTP ${resp.status} in ${ms}ms · ${bodyNote}` : `HTTP ${resp.status} but ${bodyNote}`)
+        });
+      } catch(e){
+        results.push({name: proxy.name, ok:false, detail: (e && e.name==="AbortError") ? "Timed out" : "Network/CORS error: "+(e && e.message ? e.message : String(e))});
+      }
+    }
+
+    console.log("PPI tool connection test results:", results);
+
+    const passCount = results.filter(r=>r.ok).length;
+    panel.innerHTML = `
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted);margin-bottom:8px;">
+        ${passCount}/${results.length} routes reachable right now (tested against series ${testId}). Full detail also logged to the browser console (press F12).
+      </div>
+      ${results.map(r => `
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;">
+          <span style="width:8px;height:8px;border-radius:50%;flex:none;background:${r.ok?'var(--aqua-mint)':'var(--orchid-pink)'};"></span>
+          <span style="font-family:'IBM Plex Mono',monospace;min-width:110px;color:var(--ink);">${r.name}</span>
+          <span style="color:var(--muted);">${r.detail}</span>
+        </div>`).join("")}
+    `;
+  }
+
+  function stdev(arr){
+    if (arr.length < 2) return null;
+    const mean = arr.reduce((a,b)=>a+b,0)/arr.length;
+    const variance = arr.reduce((a,b)=>a+(b-mean)*(b-mean),0)/(arr.length-1);
+    return Math.sqrt(variance);
+  }
+
+  function costSignal(oneM){
+    if (oneM == null) return {label:"No Data", cls:"signal-stable"};
+    if (oneM >= 2)    return {label:"Rising Fast", cls:"signal-rising-fast"};
+    if (oneM >= 0.5)  return {label:"Rising", cls:"signal-rising"};
+    if (oneM <= -2)   return {label:"Falling Fast", cls:"signal-falling"};
+    if (oneM <= -0.5) return {label:"Falling", cls:"signal-falling"};
+    return {label:"Stable", cls:"signal-stable"};
+  }
+
+  function momentumFlag(threeM, oneY){
+    if (threeM == null || oneY == null) return {label:"—", cls:"momentum-steady"};
+    const threeAnnualized = (Math.pow(1+threeM/100, 4) - 1) * 100;
+    const diff = threeAnnualized - oneY;
+    if (diff > 1.5) return {label:"Accelerating", cls:"momentum-accel"};
+    if (diff < -1.5) return {label:"Decelerating", cls:"momentum-decel"};
+    return {label:"Steady", cls:"momentum-steady"};
+  }
+  function percentileRank(points, latestVal){
+    const sorted = points.map(p=>p.value).slice().sort((a,b)=>a-b);
+    const below = sorted.filter(v => v <= latestVal).length;
+    return (below/sorted.length)*100;
+  }
+
+  function miniSparkline(points){
+    const trend = points.slice(-24);
+    if (trend.length < 2) return "";
+    const W=240,H=34,padY=3;
+    const vals = trend.map(p=>p.value);
+    const lo=Math.min(...vals), hi=Math.max(...vals), span=(hi-lo)||1;
+    const stepX = W/(trend.length-1);
+    const coords = trend.map((p,i)=>[i*stepX, H-padY-((p.value-lo)/span)*(H-padY*2)]);
+    const path = coords.map((c,i)=>(i===0?"M":"L")+c[0].toFixed(1)+" "+c[1].toFixed(1)).join(" ");
+    const up = trend[trend.length-1].value >= trend[0].value;
+    return `<svg class="mini-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <path d="${path}" fill="none" stroke="${up?'#DB8EDD':'#85ECE5'}" stroke-width="2"/>
+    </svg>`;
+  }
+
+  function forecastSparkline(points, forecasts){
+    const hist = points.slice(-18);
+    const fc = forecasts.slice(0,12);
+    if (hist.length < 2) return "";
+    const W=280,H=44,padY=4;
+    const allVals = hist.map(p=>p.value).concat(fc);
+    const lo=Math.min(...allVals), hi=Math.max(...allVals), span=(hi-lo)||1;
+    const total = hist.length + fc.length;
+    const stepX = W/(total-1);
+    const yOf = v => H-padY-((v-lo)/span)*(H-padY*2);
+    const histCoords = hist.map((p,i)=>[i*stepX, yOf(p.value)]);
+    const histPath = histCoords.map((c,i)=>(i===0?"M":"L")+c[0].toFixed(1)+" "+c[1].toFixed(1)).join(" ");
+    const fcCoords = [histCoords[histCoords.length-1]].concat(fc.map((v,i)=>[(hist.length+i)*stepX, yOf(v)]));
+    const fcPath = fcCoords.map((c,i)=>(i===0?"M":"L")+c[0].toFixed(1)+" "+c[1].toFixed(1)).join(" ");
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:44px;">
+      <path d="${histPath}" fill="none" stroke="#1B61FF" stroke-width="2"/>
+      <path d="${fcPath}" fill="none" stroke="#9061FF" stroke-width="2" stroke-dasharray="4,4"/>
+      <circle cx="${histCoords[histCoords.length-1][0]}" cy="${histCoords[histCoords.length-1][1]}" r="2.5" fill="#1B61FF"/>
+    </svg>`;
+  }
+
+  // ============== HOLT-WINTERS SEASONAL FORECAST ==============
+  function holtWintersForecast(points, horizon){
+    const L = 12;
+    const x = points.map(p=>p.value);
+    const n = x.length;
+    if (n < 2*L + 4) return null;
+
+    function runHW(alpha, beta, gamma){
+      const level = new Array(n), trend = new Array(n), seasonal = new Array(n);
+      const season1 = x.slice(0,L), season2 = x.slice(L,2*L);
+      const avg1 = season1.reduce((a,b)=>a+b,0)/L;
+      const avg2 = season2.reduce((a,b)=>a+b,0)/L;
+      trend[L-1] = (avg2-avg1)/L;
+      level[L-1] = avg1;
+      for (let i=0;i<L;i++) seasonal[i] = x[i]-avg1;
+      let sse=0, count=0;
+      for (let t=L; t<n; t++){
+        const prevLevel = level[t-1], prevTrend = trend[t-1];
+        const seasIdx = t-L;
+        const oneStep = prevLevel + prevTrend + seasonal[seasIdx];
+        const err = x[t] - oneStep;
+        sse += err*err; count++;
+        level[t] = alpha*(x[t]-seasonal[seasIdx]) + (1-alpha)*(prevLevel+prevTrend);
+        trend[t] = beta*(level[t]-prevLevel) + (1-beta)*prevTrend;
+        seasonal[t] = gamma*(x[t]-level[t]) + (1-gamma)*seasonal[seasIdx];
+      }
+      return {level, trend, seasonal, mse: count?sse/count:Infinity};
+    }
+
+    let best = null;
+    const grid = [0.15,0.35,0.55,0.75,0.9];
+    for (const a of grid) for (const b of grid) for (const g of grid){
+      const r = runHW(a,b,g);
+      if (!best || r.mse < best.mse) best = {...r, alpha:a, beta:b, gamma:g};
+    }
+
+    const lastLevel = best.level[n-1], lastTrend = best.trend[n-1];
+    const forecasts = [];
+    for (let m=1;m<=horizon;m++){
+      const seasIdx = n-L+((m-1)%L);
+      const seasVal = best.seasonal[seasIdx] != null ? best.seasonal[seasIdx] : 0;
+      forecasts.push(lastLevel + m*lastTrend + seasVal);
+    }
+    return {forecasts, alpha:best.alpha, beta:best.beta, gamma:best.gamma, residualStd: Math.sqrt(best.mse)};
+  }
+  function futureMonthLabel(latest, m){
+    const total = latest.year*12 + latest.month + m;
+    const y = Math.floor((total-1)/12);
+    const mo = ((total-1)%12);
+    return MONTH_ABBR[mo]+" "+y;
+  }
+
+  // ============== COUNT-UP ANIMATION ==============
+  function animateCountUp(elm, endVal, opts){
+    opts = opts || {};
+    const decimals = opts.decimals ?? 0;
+    const prefix = opts.prefix || "";
+    const suffix = opts.suffix || "";
+    const duration = 700;
+    const start = performance.now();
+    function frame(now){
+      const t = Math.min(1, (now-start)/duration);
+      const eased = 1 - Math.pow(1-t, 3);
+      const val = endVal * eased;
+      elm.textContent = prefix + val.toFixed(decimals) + suffix;
+      if (t < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ============== TABS (with sliding indicator) ==============
+  let analysisLoaded = false, forecastLoaded = false;
+  function moveIndicator(tabEl){
+    const indicator = el("tabIndicator");
+    const barRect = el("tabbar").getBoundingClientRect();
+    const rect = tabEl.getBoundingClientRect();
+    indicator.style.left = (rect.left - barRect.left + el("tabbar").scrollLeft) + "px";
+    indicator.style.width = rect.width + "px";
+  }
+  document.querySelectorAll(".tab").forEach(tabEl => {
+    tabEl.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+      document.querySelectorAll(".tabpanel").forEach(p=>p.classList.remove("active"));
+      tabEl.classList.add("active");
+      el("tab-"+tabEl.getAttribute("data-tab")).classList.add("active");
+      moveIndicator(tabEl);
+      const which = tabEl.getAttribute("data-tab");
+      if (which === "analysis" && !analysisLoaded){ analysisLoaded = true; loadAnalysis(); }
+      if (which === "forecast" && !forecastLoaded){ forecastLoaded = true; loadForecastTab(); }
+    });
+  });
+  function goToDetail(idx){
+    const detailTab = document.querySelector('.tab[data-tab="detail"]');
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    document.querySelectorAll(".tabpanel").forEach(p=>p.classList.remove("active"));
+    detailTab.classList.add("active");
+    el("tab-detail").classList.add("active");
+    moveIndicator(detailTab);
+    el("ppiSelect").value = idx;
+    loadSeries(SERIES[idx]);
+  }
+
+  // ============== OVERVIEW ==============
+  let activeOverviewRenderId = 0;
+  async function loadOverview(forceRefresh){
+    activeOverviewRenderId++;
+    const myRenderId = activeOverviewRenderId;
+    setStatus("pending","Loading overview…"); hideBanner();
+    el("reliabilityBox").textContent = "Fetching up to "+FETCH_CONCURRENCY+" categories at a time, reusing any recent cached results, to keep load on the free proxies manageable…";
+    el("overviewGrid").innerHTML = SERIES.map(s => `<div class="ppi-card"><div class="card-note is-loading">Loading ${s.category}…</div></div>`).join("");
+
+    const rows = await fetchManyByCategory(SERIES, forceRefresh, false);
+    if (myRenderId !== activeOverviewRenderId) return;
+
+    const okCount = rows.filter(r=>r.data).length;
+    const uniqueCount = new Set(SERIES.map(s=>s.id)).size;
+    el("reliabilityBox").textContent = `${uniqueCount} unique series behind these ${SERIES.length} categories · fetched in batches of ${FETCH_CONCURRENCY} · results cached (and shared across sessions) for 10 minutes.`;
+
+    if (okCount === SERIES.length) setStatus("live", "Live · all "+SERIES.length+" categories");
+    else if (okCount > 0){ setStatus("cached", `Live · ${okCount}/${SERIES.length} loaded`); showBanner(`${SERIES.length-okCount} categories didn't come back this time — their cards show "no data" below. Try Refresh All again in a moment.`); }
+    else { setStatus("cached","Unreachable"); showBanner("Couldn't reach the BLS API for any series right now. Click Refresh All to try again, or check your API key under ⚙."); }
+
+    const withData = rows.filter(r=>r.data);
+    const oneMs = withData.map(r => {
+      const pts = r.data.points, latest = pts[pts.length-1], m1 = monthsBack(pts,1);
+      return m1 ? pct(latest.value, m1.value) : null;
+    }).filter(v=>v!=null);
+    const rising = oneMs.filter(v=>v>0.5).length, falling = oneMs.filter(v=>v<-0.5).length;
+    const avgM = oneMs.length ? (oneMs.reduce((a,b)=>a+b,0)/oneMs.length) : null;
+
+    el("kpiStrip").innerHTML = `
+      <div class="kpi-card"><div class="kpi-label">Categories Tracked</div><div class="kpi-value" id="kpiCount">0</div></div>
+      <div class="kpi-card"><div class="kpi-label">Rising Cost Pressure</div><div class="kpi-value" id="kpiRising" style="color:var(--red)">0</div></div>
+      <div class="kpi-card"><div class="kpi-label">Falling / Favorable</div><div class="kpi-value" id="kpiFalling" style="color:var(--green)">0</div></div>
+      <div class="kpi-card"><div class="kpi-label">Avg 1‑Month Change</div><div class="kpi-value" id="kpiAvg">0.00%</div></div>
+    `;
+    animateCountUp(el("kpiCount"), SERIES.length);
+    animateCountUp(el("kpiRising"), rising);
+    animateCountUp(el("kpiFalling"), falling);
+    if (avgM != null) animateCountUp(el("kpiAvg"), avgM, {decimals:2, prefix: avgM>=0?"+":"", suffix:"%"});
+    else el("kpiAvg").textContent = "—";
+
+    el("overviewGrid").innerHTML = rows.map((r,i) => {
+      const delay = (i*0.05).toFixed(2)+"s";
+      if (!r.data) return `<div class="ppi-card" data-idx="${i}" style="animation-delay:${delay}">
+        <p class="ppi-cat">${r.meta.category}</p>
+        <p class="ppi-name">${r.meta.name}</p>
+        <div class="card-note">No data available right now — try Refresh All.</div>
+      </div>`;
+      const pts = r.data.points, latest = pts[pts.length-1];
+      const m1 = monthsBack(pts,1), m12 = monthsBack(pts,12);
+      const officialPct = (latest.calc && latest.calc.pct) || {};
+      const oneM = officialPct["1"]!=null ? parseFloat(officialPct["1"]) : (m1?pct(latest.value,m1.value):null);
+      const oneY = officialPct["12"]!=null ? parseFloat(officialPct["12"]) : (m12?pct(latest.value,m12.value):null);
+      const sig = costSignal(oneM);
+      const fmt = (v)=> v==null?"—":`${v>=0?"+":""}${v.toFixed(2)}%`;
+      const cls = (v)=> v==null?"flat":v>0.05?"up":v<-0.05?"down":"flat";
+      return `<div class="ppi-card" data-idx="${i}" style="animation-delay:${delay}" tabindex="0" role="button" aria-label="View ${r.meta.category} detail">
+        <div class="ppi-card-head">
+          <div><p class="ppi-cat">${r.meta.category}</p><p class="ppi-name">${r.meta.name}</p></div>
+          <span class="signal-badge ${sig.cls}">${sig.label}</span>
+        </div>
+        <div class="ppi-value">${latest.value.toFixed(2)}</div>
+        <div class="ppi-asof">as of ${monthLabel(latest)}</div>
+        ${miniSparkline(pts)}
+        <div class="ppi-metrics">
+          <div class="ppi-metric"><span class="lbl">1M</span><span class="${cls(oneM)}">${fmt(oneM)}</span></div>
+          <div class="ppi-metric"><span class="lbl">1Y</span><span class="${cls(oneY)}">${fmt(oneY)}</span></div>
+        </div>
+      </div>`;
+    }).join("");
+    el("overviewGrid").querySelectorAll(".ppi-card[data-idx]").forEach(cardEl => {
+      const go = () => goToDetail(parseInt(cardEl.getAttribute("data-idx")));
+      cardEl.addEventListener("click", go);
+      cardEl.addEventListener("keydown", (e) => { if (e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
+    });
+    el("footerUpdated").textContent = "Overview last loaded — " + new Date().toLocaleString();
+  }
+
+  el("exportOverviewBtn").addEventListener("click", () => {
+    const lines = ["Category,Series Name,Series ID,Latest Value,As Of,1-Month %,3-Month %,6-Month %,1-Year %,Signal"];
+    SERIES.forEach(s => {
+      const c = cache[s.id];
+      if (!c || !c.result){ lines.push(`"${s.category}","${s.name}",${s.id},,,,,,,`); return; }
+      const pts = c.result.points, latest = pts[pts.length-1];
+      const m1=monthsBack(pts,1), m3=monthsBack(pts,3), m6=monthsBack(pts,6), m12=monthsBack(pts,12);
+      const c1=m1?pct(latest.value,m1.value):null, c3=m3?pct(latest.value,m3.value):null,
+            c6=m6?pct(latest.value,m6.value):null, c12=m12?pct(latest.value,m12.value):null;
+      const sig = costSignal(c1);
+      lines.push([`"${s.category}"`,`"${s.name}"`,s.id,latest.value.toFixed(3),monthLabel(latest),
+        c1!=null?c1.toFixed(2):"", c3!=null?c3.toFixed(2):"", c6!=null?c6.toFixed(2):"", c12!=null?c12.toFixed(2):"",
+        sig.label].join(","));
+    });
+    const blob = new Blob([lines.join(String.fromCharCode(13,10))], {type:"text/csv"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "ppi-portfolio-summary-" + new Date().toISOString().slice(0,10) + ".csv";
+    a.click();
+  });
+  el("refreshAllBtn").addEventListener("click", () => loadOverview(true));
+  el("testConnBtn").addEventListener("click", () => runConnectionTest());
+  el("printSummaryBtn").addEventListener("click", () => window.print());
+
+  // ============== DETAIL ==============
+  function metricBlock(label, changeVal, fromP, toP){
+    const box = document.createElement("div");
+    box.className = "metric";
+    if (changeVal === null || changeVal === undefined || isNaN(changeVal)){
+      box.innerHTML = `<div class="metric-label">${label}</div><div class="metric-value flat">—</div>
+        <div class="metric-detail">Not enough history</div>`;
+      return box;
+    }
+    const dir = changeVal > 0.005 ? "up" : changeVal < -0.005 ? "down" : "flat";
+    const arrow = dir==="up"?"▲":dir==="down"?"▼":"▬";
+    box.innerHTML = `<div class="metric-label">${label}</div>
+      <div class="metric-value ${dir}">${arrow} ${changeVal>=0?"+":""}${changeVal.toFixed(2)}%</div>
+      <div class="metric-detail">${fromP && toP ? (monthLabel(fromP)+" → "+monthLabel(toP)) : ""}</div>`;
+    return box;
+  }
+
+  function renderChartWithForecast(points, forecast, latest){
+    const trend = points.slice(-36);
+    const fCount = forecast ? Math.min(forecast.forecasts.length, 6) : 0;
+    el("chartRange").textContent = trend.length ? (monthLabel(trend[0])+" – "+(fCount? "+"+fCount+"mo forecast" : monthLabel(trend[trend.length-1]))) : "—";
+    const svg = el("trendChart");
+    svg.innerHTML = "";
+    if (trend.length < 2) return;
+    const W=800,H=190,padY=18;
+    const histVals = trend.map(p=>p.value);
+    const forecastVals = forecast ? forecast.forecasts.slice(0,fCount) : [];
+    const allVals = histVals.concat(forecastVals);
+    const lo=Math.min(...allVals), hi=Math.max(...allVals), span=(hi-lo)||1;
+    const totalPoints = trend.length + fCount;
+    const stepX = W/(totalPoints-1);
+    const yOf = (v) => H-padY-((v-lo)/span)*(H-padY*2);
+    const histCoords = trend.map((p,i)=>[i*stepX, yOf(p.value)]);
+    const histPath = histCoords.map((c,i)=>(i===0?"M":"L")+c[0].toFixed(1)+" "+c[1].toFixed(1)).join(" ");
+    const ns = "http://www.w3.org/2000/svg";
+    const defs = document.createElementNS(ns,"defs");
+    defs.innerHTML = `<linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1B61FF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#1B61FF" stop-opacity="0"/>
+    </linearGradient>`;
+    svg.appendChild(defs);
+    const areaPath = histPath + ` L ${histCoords[histCoords.length-1][0].toFixed(1)} ${H} L 0 ${H} Z`;
+    const area = document.createElementNS(ns,"path");
+    area.setAttribute("d",areaPath); area.setAttribute("fill","url(#areaGrad)");
+    svg.appendChild(area);
+    const line = document.createElementNS(ns,"path");
+    line.setAttribute("d",histPath); line.setAttribute("fill","none");
+    line.setAttribute("stroke","#1B61FF"); line.setAttribute("stroke-width","2.5");
+    svg.appendChild(line);
+    try{
+      const len = line.getTotalLength();
+      line.style.strokeDasharray = len; line.style.strokeDashoffset = len; line.style.transition = "none";
+      requestAnimationFrame(() => { line.style.transition = "stroke-dashoffset 800ms ease-out"; line.style.strokeDashoffset = "0"; });
+    } catch(e){}
+    const dot = document.createElementNS(ns,"circle");
+    dot.setAttribute("cx",histCoords[histCoords.length-1][0]); dot.setAttribute("cy",histCoords[histCoords.length-1][1]);
+    dot.setAttribute("r","4.5"); dot.setAttribute("fill","#1B61FF");
+    dot.innerHTML = '<animate attributeName="r" values="4.5;7;4.5" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0.5;1" dur="2s" repeatCount="indefinite"/>';
+    svg.appendChild(dot);
+
+    if (fCount){
+      const fCoords = [histCoords[histCoords.length-1]].concat(
+        forecastVals.map((v,i)=>[(trend.length+i)*stepX, yOf(v)])
+      );
+      const fPath = fCoords.map((c,i)=>(i===0?"M":"L")+c[0].toFixed(1)+" "+c[1].toFixed(1)).join(" ");
+      const fLine = document.createElementNS(ns,"path");
+      fLine.setAttribute("d",fPath); fLine.setAttribute("fill","none");
+      fLine.setAttribute("stroke","#9061FF"); fLine.setAttribute("stroke-width","2.5");
+      fLine.setAttribute("stroke-dasharray","6,5");
+      svg.appendChild(fLine);
+      if (forecast.residualStd){
+        const bandTop = fCoords.map((c,i)=>[c[0], yOf((i===0?latest.value:forecastVals[i-1]) + forecast.residualStd*Math.sqrt(i))]);
+        const bandBot = fCoords.map((c,i)=>[c[0], yOf((i===0?latest.value:forecastVals[i-1]) - forecast.residualStd*Math.sqrt(i))]).reverse();
+        const bandPath = bandTop.map((c,i)=>(i===0?"M":"L")+c[0].toFixed(1)+" "+c[1].toFixed(1)).join(" ") + " " +
+          bandBot.map(c=>"L"+c[0].toFixed(1)+" "+c[1].toFixed(1)).join(" ") + " Z";
+        const band = document.createElementNS(ns,"path");
+        band.setAttribute("d",bandPath); band.setAttribute("fill","#9061FF"); band.setAttribute("fill-opacity","0.1");
+        svg.insertBefore(band, fLine);
+      }
+    }
+  }
+
+  function renderPanel(meta, points, official, catalog, route, renderToken){
+    currentPoints = points; currentMeta = meta; currentCatalog = catalog;
+    const latest = points[points.length-1];
+    const m1 = monthsBack(points,1), m3 = monthsBack(points,3), m6 = monthsBack(points,6), m12 = monthsBack(points,12);
+
+    const officialPct = (latest.calc && latest.calc.pct) || {};
+    const oneM  = officialPct["1"]  != null ? parseFloat(officialPct["1"])  : (m1  ? pct(latest.value,m1.value)  : null);
+    const threeM= officialPct["3"]  != null ? parseFloat(officialPct["3"])  : (m3  ? pct(latest.value,m3.value)  : null);
+    const sixM  = officialPct["6"]  != null ? parseFloat(officialPct["6"])  : (m6  ? pct(latest.value,m6.value)  : null);
+    const oneY  = officialPct["12"] != null ? parseFloat(officialPct["12"]) : (m12 ? pct(latest.value,m12.value): null);
+    const usedOfficialNumbers = official && officialPct["1"] != null;
+    const sig = costSignal(oneM);
+
+    const trailing12 = points.slice(-12);
+    const t12vals = trailing12.map(p=>p.value);
+    const hi12 = trailing12.reduce((a,b)=>b.value>a.value?b:a, trailing12[0]);
+    const lo12 = trailing12.reduce((a,b)=>b.value<a.value?b:a, trailing12[0]);
+    const avg12 = t12vals.reduce((a,b)=>a+b,0)/t12vals.length;
+    const allTimeHi = points.reduce((a,b)=>b.value>a.value?b:a, points[0]);
+    const jan = points.slice().reverse().find(p => p.year===latest.year && p.month===1);
+    const ytd = jan ? pct(latest.value, jan.value) : null;
+    const moMChanges = [];
+    for (let i=Math.max(1,points.length-13); i<points.length; i++) moMChanges.push(pct(points[i].value, points[i-1].value));
+    const vol = stdev(moMChanges.filter(v=>v!=null));
+    const mom = momentumFlag(threeM, oneY);
+    const pctile = percentileRank(points, latest.value);
+
+    const seasonLabel = catalog && catalog.seasonality
+      ? (catalog.seasonality.toUpperCase().startsWith("S") ? "Seasonally Adjusted" : "Not Seasonally Adjusted") : null;
+    const unitsLine = catalog && catalog.basePeriod
+      ? `Units: Index, ${catalog.basePeriod}${seasonLabel ? " · " + seasonLabel : ""}`
+      : `Units: Index — base period varies by series, see FRED for exact value`;
+
+    const panel = el("mainPanel");
+    panel.innerHTML = `
+      <div class="head-row">
+        <div>
+          <p class="head-cat">${meta.category}</p>
+          <p class="head-name">${meta.name}</p>
+          <div class="head-id">${meta.id} · <a href="https://fred.stlouisfed.org/series/${meta.id}" target="_blank" rel="noopener noreferrer">View on FRED ↗</a></div>
+          <div class="head-id" style="opacity:.7;user-select:all;">https://fred.stlouisfed.org/series/${meta.id}</div>
+          <div class="head-id" style="margin-top:4px;">${unitsLine}</div>
+        </div>
+        <div class="head-latest">
+          <div class="latest-value">${latest.value.toFixed(2)}</div>
+          <div class="latest-asof">as of ${monthLabel(latest)}</div>
+          <div class="signal-line"><span class="signal-badge ${sig.cls}">${sig.label}</span></div>
+        </div>
+      </div>
+      <div class="metrics-row" id="metricsRow"></div>
+      <div class="calc-note">${usedOfficialNumbers
+        ? '<span class="source-tag official">BLS official calc</span> percent changes come directly from BLS, not estimated locally.'
+        : '<span class="source-tag local">locally computed</span> from index values — (new − old) / old, matched to the exact same months as a BLS CSV.'}
+      </div>
+      <div class="chart-block">
+        <div class="chart-head"><span>HISTORY + FORECAST</span><span id="chartRange">—</span></div>
+        <svg class="chart" id="trendChart" viewBox="0 0 800 190" preserveAspectRatio="none"></svg>
+        <div class="chart-legend">
+          <div class="item"><span class="swatch" style="background:#1B61FF;"></span>Actual</div>
+          <div class="item"><span class="swatch dashed"></span>Forecast (Holt-Winters)</div>
+        </div>
+      </div>
+      <div class="stats-grid" id="statsGrid"></div>
+      <div class="diag" id="diagLine"></div>
+    `;
+
+    const mr = el("metricsRow");
+    mr.appendChild(metricBlock("1‑Month", oneM, m1, latest));
+    mr.appendChild(metricBlock("3‑Month", threeM, m3, latest));
+    mr.appendChild(metricBlock("6‑Month", sixM, m6, latest));
+    mr.appendChild(metricBlock("1‑Year",  oneY, m12, latest));
+
+    const sg = el("statsGrid");
+    const statBox = (label, value, sub) => `<div class="stat-box"><div class="label">${label}</div>
+      <div class="value">${value}</div>${sub?`<div class="sub">${sub}</div>`:""}</div>`;
+    sg.innerHTML =
+      statBox("12‑Mo High", hi12.value.toFixed(2), monthLabel(hi12)) +
+      statBox("12‑Mo Low", lo12.value.toFixed(2), monthLabel(lo12)) +
+      statBox("12‑Mo Average", avg12.toFixed(2), "mean of trailing 12 months") +
+      statBox("Year‑to‑Date", ytd!=null ? `${ytd>=0?"+":""}${ytd.toFixed(2)}%` : "—", jan?("Jan "+latest.year+" → "+monthLabel(latest)):"Jan not in range") +
+      statBox("Range High", allTimeHi.value.toFixed(2), monthLabel(allTimeHi)+" · "+points[0].year+"–"+latest.year) +
+      statBox("12‑Mo Volatility", vol!=null?vol.toFixed(2)+" pts":"—", "std. dev. of month‑over‑month % change") +
+      statBox("Momentum", `<span class="momentum-badge ${mom.cls}">${mom.label}</span>`, "3‑mo annualized vs. 1‑yr rate") +
+      statBox("48‑Mo Percentile", pctile.toFixed(0)+"th", "position of latest value in its own trailing range");
+
+    el("diagLine").innerHTML = `<b>${points.length}</b> monthly observations loaded (${points[0].year}–${latest.year}) · route: <b>${route||"cache"}</b>`;
+
+    fetchSeriesForForecast(meta.id).then(fullPoints => {
+      if (renderToken !== activeDetailRenderId) return;
+      if (!fullPoints) return;
+      const hw = holtWintersForecast(fullPoints, 6);
+      renderChartWithForecast(points, hw, latest);
+    });
+    renderChartWithForecast(points, null, latest);
+  }
+
+  let activeDetailRenderId = 0;
+  async function loadSeries(meta, forceRefresh){
+    activeDetailRenderId++;
+    const myRenderId = activeDetailRenderId;
+    setStatus("pending","Fetching "+meta.id+"…"); hideBanner();
+    el("mainPanel").innerHTML = `<div class="empty-state">Loading ${meta.name}…</div>`;
+    const result = await fetchSeries(meta.id, forceRefresh);
+    if (myRenderId !== activeDetailRenderId) return;
+    if (result){
+      setStatus("live", result.official ? "Live · BLS official calc" : "Live · BLS API");
+      renderPanel(meta, result.points, result.official, result.catalog, result.route, myRenderId);
+      el("footerUpdated").textContent = "Live data — fetched " + new Date().toLocaleString();
+    } else {
+      setStatus("cached","Unreachable — no data shown");
+      showBanner("Couldn't reach the BLS API right now — tried a direct connection plus all 6 proxy routes with retries, and every one failed or was rate-limited. Click Refresh to try again, or add your own free BLS key (⚙ API Key) so you're not depending on the shared proxy quota.");
+      el("mainPanel").innerHTML = `<div class="empty-state">No live data available for ${meta.name} right now. Try refreshing in a moment.</div>`;
+      el("footerUpdated").textContent = "Last attempt — " + new Date().toLocaleString();
+    }
+  }
+
+  function populateSelect(){
+    el("ppiSelect").innerHTML = SERIES.map((s,i) => `<option value="${i}">${s.category} — ${s.name}</option>`).join("");
+  }
+  el("ppiSelect").addEventListener("change", () => loadSeries(SERIES[parseInt(el("ppiSelect").value)]));
+  el("refreshBtn").addEventListener("click", () => loadSeries(SERIES[parseInt(el("ppiSelect").value)], true));
+
+  el("exportBtn").addEventListener("click", () => {
+    if (!currentPoints || !currentMeta){ showBanner("Nothing to export yet — select a series first.", true); return; }
+    const lines = [];
+    lines.push(`Series ID:,${currentMeta.id}`);
+    lines.push(`Series Title:,"${currentMeta.name}"`);
+    lines.push(`Category:,"${currentMeta.category}"`);
+    lines.push(`Source:,U.S. Bureau of Labor Statistics (BLS), Producer Price Index program`);
+    lines.push(`Units:,${currentCatalog && currentCatalog.basePeriod ? "Index, "+currentCatalog.basePeriod : "Index (see FRED for base period)"}`);
+    lines.push(`Range:,${currentPoints[0].year}-${String(currentPoints[0].month).padStart(2,"0")} to ${currentPoints[currentPoints.length-1].year}-${String(currentPoints[currentPoints.length-1].month).padStart(2,"0")}`);
+    lines.push(`Exported:,${new Date().toISOString()}`);
+    lines.push("");
+    lines.push("Year,Period,Period Name,Value");
+    currentPoints.forEach(p => lines.push(`${p.year},${p.period},${p.periodName},${p.value.toFixed(3)}`));
+    const blob = new Blob([lines.join(String.fromCharCode(13,10))], {type:"text/csv"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${currentMeta.id}_${currentPoints[0].year}-${currentPoints[currentPoints.length-1].year}.csv`;
+    a.click();
+  });
+
+  // ============== COMPARE ==============
+  const COMPARE_COLORS = ["#1B61FF","#FFF077","#85ECE5","#DB8EDD","#9061FF"];
+  const MAX_COMPARE = 5;
+  let compareSelected = [];
+  function renderCompareChecks(){
+    const box = el("compareChecks");
+    box.innerHTML = SERIES.map((s,i) => `
+      <label class="compare-check" data-idx="${i}">
+        <input type="checkbox" data-idx="${i}"> ${s.category}
+      </label>`).join("");
+    box.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener("change", () => {
+        const idx = parseInt(cb.getAttribute("data-idx"));
+        if (cb.checked){
+          if (compareSelected.length >= MAX_COMPARE){ cb.checked = false; return; }
+          compareSelected.push(idx);
+        } else {
+          compareSelected = compareSelected.filter(x => x !== idx);
+        }
+        box.querySelectorAll('input[type="checkbox"]').forEach(other => {
+          const label = other.closest(".compare-check");
+          if (!other.checked && compareSelected.length >= MAX_COMPARE){ other.disabled = true; label.classList.add("disabled"); }
+          else { other.disabled = false; label.classList.remove("disabled"); }
+        });
+      });
+    });
+  }
+  el("compareBtn").addEventListener("click", async () => {
+    if (compareSelected.length < 2){
+      el("compareResults").innerHTML = `<div class="empty-state">Pick at least 2 series above to compare.</div>`;
+      return;
+    }
+    el("compareResults").innerHTML = `<div class="empty-state">Loading ${compareSelected.length} series…</div>`;
+    const chosen = compareSelected.map(i => SERIES[i]);
+    const fetched = await fetchManyByCategory(chosen, false, false);
+    const rows = fetched.filter(r => r.data && r.data.points.length >= 2);
+    if (!rows.length){
+      el("compareResults").innerHTML = `<div class="empty-state">Couldn't fetch data for any of the selected series right now — try again in a moment.</div>`;
+      return;
+    }
+    const minLen = Math.min(...rows.map(r => r.data.points.length));
+    const W=820,H=230,padY=20,padL=44,padR=10,padTop=14;
+    const plotW = W-padL-padR, plotH = H-padY-padTop;
+    let minVal=Infinity, maxVal=-Infinity;
+    const seriesLines = rows.map(r => {
+      const pts = r.data.points.slice(-minLen);
+      const base = pts[0].value;
+      const rebased = pts.map(p => (p.value/base)*100);
+      rebased.forEach(v => { if(v<minVal) minVal=v; if(v>maxVal) maxVal=v; });
+      return {meta:r.meta, pts, rebased};
+    });
+    const pad = (maxVal-minVal)*0.08 || 1;
+    const gLo = minVal-pad, gHi = maxVal+pad, span = (gHi-gLo)||1;
+    const stepX = plotW/(minLen-1);
+    const yOf = v => padTop + plotH - ((v-gLo)/span)*plotH;
+
+    let gridInner = "";
+    const gridLevels = 4;
+    for (let g=0; g<=gridLevels; g++){
+      const v = gLo + (span*g/gridLevels);
+      const y = yOf(v);
+      gridInner += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="#4a4a50" stroke-width="1"/>`;
+      gridInner += `<text x="${padL-8}" y="${(y+3).toFixed(1)}" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#8b8b92">${v.toFixed(0)}</text>`;
+    }
+    const firstPt = seriesLines[0].pts[0], lastPt = seriesLines[0].pts[seriesLines[0].pts.length-1];
+    gridInner += `<text x="${padL}" y="${H-4}" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#8b8b92">${monthLabel(firstPt)}</text>`;
+    gridInner += `<text x="${W-padR}" y="${H-4}" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#8b8b92">${monthLabel(lastPt)}</text>`;
+
+    let svgInner = gridInner;
+    seriesLines.forEach((s,i) => {
+      const coords = s.rebased.map((v,idx) => [padL+idx*stepX, yOf(v)]);
+      const path = coords.map((c,idx)=>(idx===0?"M":"L")+c[0].toFixed(1)+" "+c[1].toFixed(1)).join(" ");
+      svgInner += `<path d="${path}" fill="none" stroke="${COMPARE_COLORS[i]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+      const end = coords[coords.length-1];
+      svgInner += `<circle cx="${end[0].toFixed(1)}" cy="${end[1].toFixed(1)}" r="4" fill="#2f2f33" stroke="${COMPARE_COLORS[i]}" stroke-width="2.5"/>`;
+    });
+    const legend = seriesLines.map((s,i) => `<div class="item"><span class="swatch" style="background:${COMPARE_COLORS[i]}"></span>${s.meta.category}</div>`).join("");
+    const tableRows = seriesLines.map((s,i) => {
+      const pts = s.pts, latest = pts[pts.length-1];
+      const m1=monthsBack(pts,1), m3=monthsBack(pts,3), m6=monthsBack(pts,6), m12=monthsBack(pts,12);
+      const c1=m1?pct(latest.value,m1.value):null, c3=m3?pct(latest.value,m3.value):null,
+            c6=m6?pct(latest.value,m6.value):null, c12=m12?pct(latest.value,m12.value):null;
+      const fmt = (v) => v==null ? "—" : `${v>=0?"+":""}${v.toFixed(2)}%`;
+      const cls = (v) => v==null ? "flat" : v>0.05 ? "up" : v<-0.05 ? "down" : "flat";
+      return `<tr>
+        <td><span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${COMPARE_COLORS[i]};margin-right:6px;"></span>${s.meta.category}</td>
+        <td>${latest.value.toFixed(2)}</td>
+        <td class="${cls(c1)}">${fmt(c1)}</td>
+        <td class="${cls(c3)}">${fmt(c3)}</td>
+        <td class="${cls(c6)}">${fmt(c6)}</td>
+        <td class="${cls(c12)}">${fmt(c12)}</td>
+      </tr>`;
+    }).join("");
+    el("compareResults").innerHTML = `
+      <div class="compare-legend">${legend}</div>
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:230px;background:var(--card);border:1px solid var(--line);border-radius:10px;">${svgInner}</svg>
+      <table class="compare-table">
+        <thead><tr><th>Series</th><th>Latest</th><th>1‑Month</th><th>3‑Month</th><th>6‑Month</th><th>1‑Year</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+      <div class="calc-note" style="text-align:left;margin-top:10px;">Rebased to 100 at the start of the shared ${minLen}-month window shown; percent changes computed locally (new − old) / old for consistency across all selected series.</div>
+    `;
+  });
+
+  // ============== ANALYSIS ==============
+  let activeAnalysisRenderId = 0;
+  async function loadAnalysis(){
+    activeAnalysisRenderId++;
+    const myRenderId = activeAnalysisRenderId;
+    el("momentumTableWrap").innerHTML = `<div class="empty-state">Loading momentum &amp; forecast…</div>`;
+    const [dataRows, forecastRows] = await Promise.all([
+      fetchManyByCategory(SERIES, false, false),
+      fetchManyByCategory(SERIES, false, true)
+    ]);
+    if (myRenderId !== activeAnalysisRenderId) return;
+
+    const rows = SERIES.map((s,i) => ({
+      meta:s,
+      data: dataRows[i] ? dataRows[i].data : null,
+      full: forecastRows[i] ? forecastRows[i].data : null
+    })).filter(r => r.data && r.data.points.length >= 13);
+
+    if (!rows.length){
+      el("momentumTableWrap").innerHTML = `<div class="empty-state">Couldn't load enough data for analysis right now — try Refresh Analysis in a moment.</div>`;
+      return;
+    }
+    const momRows = rows.map(r => {
+      const pts = r.data.points, latest = pts[pts.length-1];
+      const m3 = monthsBack(pts,3), m12 = monthsBack(pts,12);
+      const threeM = m3 ? pct(latest.value, m3.value) : null;
+      const oneY = m12 ? pct(latest.value, m12.value) : null;
+      const mom = momentumFlag(threeM, oneY);
+      const hw = r.full ? holtWintersForecast(r.full, 3) : null;
+      const f1 = hw ? hw.forecasts[0] : null;
+      const f3 = hw ? hw.forecasts[2] : null;
+      return {cat:r.meta.category, latest:latest.value, threeM, oneY, mom, f1, f3};
+    });
+    el("momentumTableWrap").innerHTML = `
+      <table class="compare-table">
+        <thead><tr><th>Category</th><th>Latest</th><th>3‑Mo (ann.)</th><th>1‑Yr</th><th>Momentum</th><th>Forecast +1M</th><th>Forecast +3M</th></tr></thead>
+        <tbody>${momRows.map(m => {
+          const threeAnn = m.threeM!=null ? (Math.pow(1+m.threeM/100,4)-1)*100 : null;
+          const fmt = v => v==null?"—":`${v>=0?"+":""}${v.toFixed(2)}%`;
+          const fmtVal = v => v==null?"—":v.toFixed(2);
+          const f1chg = m.f1!=null ? pct(m.f1, m.latest) : null;
+          const f3chg = m.f3!=null ? pct(m.f3, m.latest) : null;
+          const chgCls = v => v==null?"flat":v>0.05?"up":v<-0.05?"down":"flat";
+          return `<tr>
+            <td style="text-align:left;">${m.cat}</td>
+            <td>${m.latest.toFixed(2)}</td>
+            <td>${fmt(threeAnn)}</td>
+            <td>${fmt(m.oneY)}</td>
+            <td><span class="momentum-badge ${m.mom.cls}">${m.mom.label}</span></td>
+            <td>${fmtVal(m.f1)} <span class="${chgCls(f1chg)}" style="font-size:10.5px;">(${fmt(f1chg)})</span></td>
+            <td>${fmtVal(m.f3)} <span class="${chgCls(f3chg)}" style="font-size:10.5px;">(${fmt(f3chg)})</span></td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>
+      <div class="calc-note" style="text-align:left;margin-top:10px;">3‑Mo (ann.) annualizes the trailing 3‑month move ((1+3mo%)⁴−1) so it's on the same footing as the 1‑Yr figure — comparing the two is what flags acceleration or deceleration. Forecast columns use the same Holt-Winters seasonal model as the Forecast tab.</div>
+    `;
+  }
+  el("refreshAnalysisBtn").addEventListener("click", loadAnalysis);
+
+  // ============== FORECAST TAB ==============
+  let activeForecastRenderId = 0;
+  async function loadForecastTab(forceRefresh){
+    activeForecastRenderId++;
+    const myRenderId = activeForecastRenderId;
+    el("forecastGrid").innerHTML = SERIES.map(s => `<div class="forecast-card"><div class="card-note is-loading">Loading ${s.category}…</div></div>`).join("");
+    const rows = await fetchManyByCategory(SERIES, forceRefresh, true);
+    if (myRenderId !== activeForecastRenderId) return;
+
+    el("forecastGrid").innerHTML = rows.map((r,i) => {
+      const delay = (i*0.05).toFixed(2)+"s";
+      const s = r.meta, pts = r.data;
+      if (!pts){
+        return `<div class="forecast-card" style="animation-delay:${delay}"><p class="ppi-cat">${s.category}</p><p class="ppi-name">${s.name}</p>
+          <div class="card-note">No data available right now — try Refresh Forecasts.</div></div>`;
+      }
+      const hw = holtWintersForecast(pts, 12);
+      const latest = pts[pts.length-1];
+      if (!hw){
+        return `<div class="forecast-card" style="animation-delay:${delay}"><p class="ppi-cat">${s.category}</p><p class="ppi-name">${s.name}</p>
+          <div class="ppi-value">${latest.value.toFixed(2)}</div><div class="ppi-asof">as of ${monthLabel(latest)}</div>
+          <div class="card-note">Not enough history for a reliable seasonal forecast (needs ~28+ months).</div></div>`;
+      }
+      const steps = [1,3,6,12];
+      const chips = steps.map(m => {
+        const val = hw.forecasts[m-1];
+        const chg = pct(val, latest.value);
+        const label = futureMonthLabel(latest, m);
+        const cls = chg==null?"flat":chg>0.05?"up":chg<-0.05?"down":"flat";
+        return `<div class="forecast-chip">
+          <div class="h-label">+${m}M</div>
+          <div class="h-month">${label}</div>
+          <div class="h-value">${val.toFixed(2)}</div>
+          <div class="h-change ${cls}">${chg>=0?"+":""}${chg.toFixed(2)}%</div>
+        </div>`;
+      }).join("");
+      return `<div class="forecast-card" style="animation-delay:${delay}">
+        <div class="ppi-card-head">
+          <div><p class="ppi-cat">${s.category}</p><p class="ppi-name">${s.name}</p></div>
+          <span class="source-tag forecast">Holt-Winters</span>
+        </div>
+        <div class="ppi-value">${latest.value.toFixed(2)}</div>
+        <div class="ppi-asof">as of ${monthLabel(latest)} · ${pts.length} months of history used</div>
+        ${forecastSparkline(pts, hw.forecasts)}
+        <div class="forecast-horizons">${chips}</div>
+      </div>`;
+    }).join("");
+    el("footerUpdated").textContent = "Forecasts recomputed — " + new Date().toLocaleString();
+  }
+  el("refreshForecastBtn").addEventListener("click", () => loadForecastTab(true));
+
+  // ============== KEY ==============
+  el("keyToggleBtn").addEventListener("click", () => el("keyForm").classList.toggle("show"));
+  el("saveKeyBtn").addEventListener("click", async () => {
+    const key = el("blsKeyInput").value.trim();
+    const fkey = el("fredKeyInput").value.trim();
+    blsKey = key; fredKey = fkey;
+    try{ await window.storage.set("bls-registration-key", key, false); } catch(e){}
+    try{ await window.storage.set("fred-api-key", fkey, false); } catch(e){}
+    const msg = key && fkey ? "Both keys saved — BLS is primary, FRED is the automatic fallback."
+      : key ? "BLS key saved. Add a FRED key too so a fallback source is available if BLS is unreachable."
+      : fkey ? "FRED key saved — it will be used as the fallback if BLS is unreachable."
+      : "Keys cleared.";
+    showBanner(msg, true);
+    el("keyForm").classList.remove("show");
+  });
+  async function loadStoredKey(){
+    try{
+      const res = await window.storage.get("bls-registration-key", false);
+      if (res && res.value){ blsKey = res.value; el("blsKeyInput").value = res.value; }
+    } catch(e){}
+    try{
+      const res2 = await window.storage.get("fred-api-key", false);
+      if (res2 && res2.value){ fredKey = res2.value; el("fredKeyInput").value = res2.value; }
+    } catch(e){}
+  }
+
+  // ============== INIT ==============
+  (async function init(){
+    await loadStoredKey();
+    populateSelect();
+    renderCompareChecks();
+    el("ppiSelect").value = 0;
+    requestAnimationFrame(() => moveIndicator(document.querySelector('.tab.active')));
+    window.addEventListener("resize", () => {
+      const active = document.querySelector('.tab.active');
+      if (active) moveIndicator(active);
+    });
+    await loadOverview(false);
+  })();
+})();
+</script>
+</body>
+</html>
